@@ -6,6 +6,5 @@ and deep learning, particularly backpropagation and writing efficient vectorised
     * Linear SVM (loss, gradient, tuning, stochastic gradient descent, visualisations)
     * Softmax classifier (loss, gradient, tuning, stochastic gradient descent, visualisations)
     * Two-layer neural network (forward and backward pass, training, visualisations, tuning)
-    * Feature extraction (HoG, colour histogram)
 
 Implemented in Python 3.
