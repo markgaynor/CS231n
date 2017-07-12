@@ -7,4 +7,11 @@ and deep learning, particularly backpropagation and writing efficient vectorised
     * Softmax classifier (loss, gradient, tuning, stochastic gradient descent, visualisations)
     * Two-layer neural network (forward and backward pass, training, visualisations, tuning)
 
-Implemented in Python 3.
+* Assigment 2: 
+    * Fully connected neural network (allowing for arbitrary depth), update rules (SGD w/ momentum, RMSProp, Adam)
+    * Batch normalisation, weight initialisation methods
+    * Dropout
+    * Convolutional neural network (convolution, max pooling, sandwich layers, forward and backward pass, spatial batch norm)
+    * Classifying CIFAR-10 with TensorFlow
+    
+Implemented in Python 3.6.
