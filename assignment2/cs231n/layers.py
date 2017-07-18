@@ -335,16 +335,40 @@ def conv_forward_naive(x, w, b, conv_param):
       W" = 1 + (W + 2 * pad - WW) / stride
     - cache: (x, w, b, conv_param)
     """
-    out = None
-    ###########################################################################
-    # TODO: Implement the convolutional forward pass.                         #
-    # Hint: you can use the function np.pad for padding.                      #
-    ###########################################################################
-    pass
-    ###########################################################################
-    #                             END OF YOUR CODE                            #
-    ###########################################################################
+    stride,pad = conv_param["stride"], conv_param["pad"]
+    N,C,H,W = x.shape
+    F,C,HH,WW = w.shape
+    
+    # Shape of activation map.
+    out_h = int(1 + (H + 2*pad - HH) / stride)
+    out_w = int(1 + (W + 2*pad - WW) / stride)
+    out = np.zeros((N, F, out_h, out_w))
+
+    # Zero pad by the specified height and width.
+    x_pad = np.zeros((N,C,H+2*pad,W+2*pad))
+    for img in range(N):
+        for chan in range(C):
+            x_pad[img,chan] = np.pad(x[img,chan],(1,1),"constant")
+
+    # Loop over data points:
+    for img in range(0, N):
+        # Loop over height:
+        for i in range(0, out_h):
+            # Loop over width:
+            for j in range(0, out_w):
+                # Loop over filters:
+                for flt in range(0, F):
+                    # Extract receptive field and current filter.
+                    cur_field = x_pad[img,:,i*stride:i*stride+HH, j*stride:j*stride+WW]
+                    cur_flt = w[flt]
+
+                    # Multiply receptive field by weights in filter.
+                    out[img,flt,i,j] = np.sum(cur_field * cur_flt)
+                # Add bias
+                out[img,:,i,j] += b
+            
     cache = (x, w, b, conv_param)
+
     return out, cache
 
 
