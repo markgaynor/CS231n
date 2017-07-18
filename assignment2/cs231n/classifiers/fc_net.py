@@ -2,7 +2,6 @@ import numpy as np
 from cs231n.layers import *
 from cs231n.layer_utils import *
 
-
 class TwoLayerNet(object):
     """
     A two-layer fully-connected neural network with ReLU nonlinearity and
@@ -276,3 +275,60 @@ class FullyConnectedNet(object):
             grads["b" + str(i)] = db
 
         return loss, grads
+
+def affine_bn_relu_forward(x, w, b, gamma, beta, bn_param):
+    """
+    Forward pass for an affine layer with ReLU and batch normalisation. 
+
+    Input:
+    - x: Data of shape (N, D)
+    - w: Array of weights, shape (D, M)
+    - b: Array of biases, shape (M,)
+    - gamma: Scale parameter of shape (D,)
+    - beta: Shift parameter of scale (D,)
+    - bn_param: Dictionary with the following keys:
+        - mode: "train" or "test"; required
+        - eps: Constant for numeric stability
+        - momentum: Constant for running mean / variance.
+        - running_mean: Array of shape (D,) giving running mean of features
+        - running_var Array of shape (D,) giving running variance of features
+
+    Returns a tuple of:
+    - out: of shape (N, D)
+    - cache: A tuple of values needed in the backwards pass.
+    """
+    affine_out,fc_cache = affine_forward(x, w, b)
+    bn_out,bn_cache = batchnorm_forward(affine_out, gamma, beta, bn_param)
+    relu_out,relu_cache = relu_forward(bn_out)
+    cache = (fc_cache, bn_cache, relu_cache)
+
+    return relu_out, cache
+
+def affine_bn_relu_backward(dout, cache):
+    """
+    Backward pass for the above.
+
+    Inputs:
+    - dout: Upstream derivative, of shape (N, M)
+    - cache: Tuple of:
+        - x: Input data, of shape (N, d_1, ... d_k)
+        - w: Weights, of shape (D, M)
+
+    Returns a tuple of:
+    - dx: Gradient with respect to x, of shape (N, d1, ..., d_k)
+    - dw: Gradient with respect to w, of shape (D, M)
+    - db: Gradient with respect to b, of shape (M,)
+    """
+    fc_cache,bn_cache,relu_cache = cache
+
+    drelu_out = relu_backward(dout, relu_cache)
+    dbn_out,dgamma,dbeta = batchnorm_backward(drelu_out, bn_cache)
+    dx,dw,db = affine_backward(dbn_out, fc_cache)
+
+    return dx, dw, db, dgamma, dbeta
+
+
+
+
+
+        

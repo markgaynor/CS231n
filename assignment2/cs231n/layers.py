@@ -1,6 +1,4 @@
-from builtins import range
 import numpy as np
-
 
 def affine_forward(x, w, b):
     """
@@ -120,7 +118,7 @@ def batchnorm_forward(x, gamma, beta, bn_param):
     - gamma: Scale parameter of shape (D,)
     - beta: Shift paremeter of shape (D,)
     - bn_param: Dictionary with the following keys:
-      - mode: 'train' or 'test'; required
+      - mode: "train" or "test"; required
       - eps: Constant for numeric stability
       - momentum: Constant for running mean / variance.
       - running_mean: Array of shape (D,) giving running mean of features
@@ -130,55 +128,49 @@ def batchnorm_forward(x, gamma, beta, bn_param):
     - out: of shape (N, D)
     - cache: A tuple of values needed in the backward pass
     """
-    mode = bn_param['mode']
-    eps = bn_param.get('eps', 1e-5)
-    momentum = bn_param.get('momentum', 0.9)
+    mode = bn_param["mode"]
+    eps = bn_param.get("eps", 1e-5)
+    momentum = bn_param.get("momentum", 0.9)
 
     N, D = x.shape
-    running_mean = bn_param.get('running_mean', np.zeros(D, dtype=x.dtype))
-    running_var = bn_param.get('running_var', np.zeros(D, dtype=x.dtype))
+    running_mean = bn_param.get("running_mean", np.zeros(D, dtype=x.dtype))
+    running_var = bn_param.get("running_var", np.zeros(D, dtype=x.dtype))
 
     out, cache = None, None
-    if mode == 'train':
-        #######################################################################
-        # TODO: Implement the training-time forward pass for batch norm.      #
-        # Use minibatch statistics to compute the mean and variance, use      #
-        # these statistics to normalize the incoming data, and scale and      #
-        # shift the normalized data using gamma and beta.                     #
-        #                                                                     #
-        # You should store the output in the variable out. Any intermediates  #
-        # that you need for the backward pass should be stored in the cache   #
-        # variable.                                                           #
-        #                                                                     #
-        # You should also use your computed sample mean and variance together #
-        # with the momentum variable to update the running mean and running   #
-        # variance, storing your result in the running_mean and running_var   #
-        # variables.                                                          #
-        #######################################################################
-        pass
-        #######################################################################
-        #                           END OF YOUR CODE                          #
-        #######################################################################
-    elif mode == 'test':
-        #######################################################################
-        # TODO: Implement the test-time forward pass for batch normalization. #
-        # Use the running mean and variance to normalize the incoming data,   #
-        # then scale and shift the normalized data using gamma and beta.      #
-        # Store the result in the out variable.                               #
-        #######################################################################
-        pass
-        #######################################################################
-        #                          END OF YOUR CODE                           #
-        #######################################################################
+    if mode == "train":
+        # Numerator: subtract sample mean from xi.
+        sample_mean = np.mean(x, axis=0)
+        bn_num = x - sample_mean
+
+        # Denominator: square root of variance plus epsilon for stability.
+        bn_num_sq = bn_num ** 2
+        sample_var = 1.0/N * np.sum(bn_num_sq, axis=0)
+        bn_denom = np.sqrt(sample_var + eps)
+        inv_bn_denom = 1.0/bn_denom
+        
+        # Normalise.
+        x_norm = bn_num * inv_bn_denom
+        
+        # Scale by gamma and beta.
+        gammax = gamma * x_norm
+        out = gammax + beta
+
+        cache = (x, sample_mean, bn_num, bn_num_sq, sample_var, bn_denom, inv_bn_denom, x_norm, eps, gamma, gammax, beta)
+
+    elif mode == "test":
+        # Use the running mean and variance to normalise.
+        x_norm = (x - running_mean) / np.sqrt(running_var + eps) 
+        
+        # Shift by gamma and beta,
+        out = gamma * x_norm + beta
     else:
-        raise ValueError('Invalid forward batchnorm mode "%s"' % mode)
+        raise ValueError("Invalid forward batchnorm mode '%s'" % mode)
 
     # Store the updated running means back into bn_param
-    bn_param['running_mean'] = running_mean
-    bn_param['running_var'] = running_var
+    bn_param["running_mean"] = running_mean
+    bn_param["running_var"] = running_var
 
     return out, cache
-
 
 def batchnorm_backward(dout, cache):
     """
@@ -197,15 +189,41 @@ def batchnorm_backward(dout, cache):
     - dgamma: Gradient with respect to scale parameter gamma, of shape (D,)
     - dbeta: Gradient with respect to shift parameter beta, of shape (D,)
     """
-    dx, dgamma, dbeta = None, None, None
-    ###########################################################################
-    # TODO: Implement the backward pass for batch normalization. Store the    #
-    # results in the dx, dgamma, and dbeta variables.                         #
-    ###########################################################################
-    pass
-    ###########################################################################
-    #                             END OF YOUR CODE                            #
-    ###########################################################################
+    N,D = dout.shape
+    (x, sample_mean, bn_num, bn_num_sq, sample_var, bn_denom, inv_bn_denom, x_norm, eps, gamma, gammax, beta) = cache
+
+    # Backprop through the addition with beta.
+    dbeta = np.sum(dout, axis = 0)
+
+    # Backprop through the product of x_norm with gamma.
+    dgamma = np.sum(x_norm * dout, axis = 0)
+    dx_norm = dout * gamma
+
+    # Backprop through the multiplication of the numerator and denominator.
+    dinv_bn_denom = np.sum(dx_norm * bn_num, axis=0)
+    dbn_num1 = dx_norm * inv_bn_denom
+
+    # Backprop through the inversion of the denominator value.
+    dbn_denom = -1.0 /(bn_denom ** 2) * dinv_bn_denom
+
+    # Backprop through the square root and addition of epsilon.
+    dsample_var = 0.5 * 1.0 / np.sqrt(sample_var + eps) * dbn_denom
+
+    # Backprop through the column-wise sum; matrix is same shape as input. 
+    dbn_num_sq = 1.0/N * np.ones((N,D)) * dsample_var
+
+    # Backprop through the square operation.
+    dxmu2 = 2 * bn_num * dbn_num_sq
+
+    # Backprop through the subtraction of mu from x. 
+    dx1 = (dbn_num1 + dxmu2)
+    dmu = -1 * np.sum(dbn_num1 + dxmu2, axis=0)
+
+    # Backprop through column-wise sum; matrix is same shape as input.
+    dx2 = 1.0 /N * np.ones((N,D)) * dmu
+
+    # Sum the gradients from the subtraction and mean operations to arrive at the final answer.
+    dx = dx1 + dx2
 
     return dx, dgamma, dbeta
 
@@ -239,7 +257,6 @@ def batchnorm_backward_alt(dout, cache):
 
     return dx, dgamma, dbeta
 
-
 def dropout_forward(x, dropout_param):
     """
     Performs the forward pass for (inverted) dropout.
@@ -248,7 +265,7 @@ def dropout_forward(x, dropout_param):
     - x: Input data, of any shape
     - dropout_param: A dictionary with the following keys:
       - p: Dropout parameter. We drop each neuron output with probability p.
-      - mode: 'test' or 'train'. If the mode is train, then perform dropout;
+      - mode: "test" or "train". If the mode is train, then perform dropout;
         if the mode is test, then just return the input.
       - seed: Seed for the random number generator. Passing seed makes this
         function deterministic, which is needed for gradient checking but not
@@ -259,36 +276,23 @@ def dropout_forward(x, dropout_param):
     - cache: tuple (dropout_param, mask). In training mode, mask is the dropout
       mask that was used to multiply the input; in test mode, mask is None.
     """
-    p, mode = dropout_param['p'], dropout_param['mode']
-    if 'seed' in dropout_param:
-        np.random.seed(dropout_param['seed'])
+    p, mode = dropout_param["p"], dropout_param["mode"]
+    if "seed" in dropout_param:
+        np.random.seed(dropout_param["seed"])
 
     mask = None
     out = None
 
-    if mode == 'train':
-        #######################################################################
-        # TODO: Implement training phase forward pass for inverted dropout.   #
-        # Store the dropout mask in the mask variable.                        #
-        #######################################################################
-        pass
-        #######################################################################
-        #                           END OF YOUR CODE                          #
-        #######################################################################
-    elif mode == 'test':
-        #######################################################################
-        # TODO: Implement the test phase forward pass for inverted dropout.   #
-        #######################################################################
-        pass
-        #######################################################################
-        #                            END OF YOUR CODE                         #
-        #######################################################################
+    if mode == "train":
+        mask = (np.random.rand(*x.shape) < (1-p)) / (1-p)
+        out = x * mask
+    elif mode == "test":
+        out = x
 
     cache = (dropout_param, mask)
     out = out.astype(x.dtype, copy=False)
 
     return out, cache
-
 
 def dropout_backward(dout, cache):
     """
@@ -299,21 +303,14 @@ def dropout_backward(dout, cache):
     - cache: (dropout_param, mask) from dropout_forward.
     """
     dropout_param, mask = cache
-    mode = dropout_param['mode']
+    mode = dropout_param["mode"]
 
     dx = None
-    if mode == 'train':
-        #######################################################################
-        # TODO: Implement training phase backward pass for inverted dropout   #
-        #######################################################################
-        pass
-        #######################################################################
-        #                          END OF YOUR CODE                           #
-        #######################################################################
-    elif mode == 'test':
+    if mode == "train":
+        dx = mask * dout
+    elif mode == "test":
         dx = dout
     return dx
-
 
 def conv_forward_naive(x, w, b, conv_param):
     """
@@ -328,14 +325,14 @@ def conv_forward_naive(x, w, b, conv_param):
     - w: Filter weights of shape (F, C, HH, WW)
     - b: Biases, of shape (F,)
     - conv_param: A dictionary with the following keys:
-      - 'stride': The number of pixels between adjacent receptive fields in the
+      - "stride": The number of pixels between adjacent receptive fields in the
         horizontal and vertical directions.
-      - 'pad': The number of pixels that will be used to zero-pad the input.
+      - "pad": The number of pixels that will be used to zero-pad the input.
 
     Returns a tuple of:
-    - out: Output data, of shape (N, F, H', W') where H' and W' are given by
-      H' = 1 + (H + 2 * pad - HH) / stride
-      W' = 1 + (W + 2 * pad - WW) / stride
+    - out: Output data, of shape (N, F, H", W") where H" and W" are given by
+      H" = 1 + (H + 2 * pad - HH) / stride
+      W" = 1 + (W + 2 * pad - WW) / stride
     - cache: (x, w, b, conv_param)
     """
     out = None
@@ -382,9 +379,9 @@ def max_pool_forward_naive(x, pool_param):
     Inputs:
     - x: Input data, of shape (N, C, H, W)
     - pool_param: dictionary with the following keys:
-      - 'pool_height': The height of each pooling region
-      - 'pool_width': The width of each pooling region
-      - 'stride': The distance between adjacent pooling regions
+      - "pool_height": The height of each pooling region
+      - "pool_width": The width of each pooling region
+      - "stride": The distance between adjacent pooling regions
 
     Returns a tuple of:
     - out: Output data
@@ -433,7 +430,7 @@ def spatial_batchnorm_forward(x, gamma, beta, bn_param):
     - gamma: Scale parameter, of shape (C,)
     - beta: Shift parameter, of shape (C,)
     - bn_param: Dictionary with the following keys:
-      - mode: 'train' or 'test'; required
+      - mode: "train" or "test"; required
       - eps: Constant for numeric stability
       - momentum: Constant for running mean / variance. momentum=0 means that
         old information is discarded completely at every time step, while
